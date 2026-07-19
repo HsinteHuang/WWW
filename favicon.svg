@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <!-- 圓角黑色背景與銅棕色邊框 -->
+  <rect width="32" height="32" rx="6" fill="#000000" stroke="#78350f" stroke-width="2"/>
+  <!-- 琥珀色命令提示字元 > -->
+  <path d="M8 8 L16 16 L8 24" fill="none" stroke="#ffaa00" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- 琥珀色閃爍底線游標 _ -->
+  <line x1="18" y1="24" x2="26" y2="24" stroke="#ffaa00" stroke-width="3" stroke-linecap="round"/>
+</svg>

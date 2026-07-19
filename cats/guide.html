@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MeowJob 貓咪打工平台 - 使用說明書</title>
+<link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+<link rel="stylesheet" href="./style.css" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@500;700&family=Noto+Sans+TC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  .guide-container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 30px 16px 80px;
+  }
+  .guide-header {
+    text-align: center;
+    margin-bottom: 40px;
+  }
+  .guide-header h1 {
+    color: var(--primary);
+    font-size: 2.2rem;
+    margin: 10px 0;
+  }
+  .guide-header p {
+    color: var(--text-muted);
+    font-size: 1.1rem;
+  }
+  .guide-card {
+    background: var(--white);
+    border-radius: var(--radius-lg);
+    padding: 28px;
+    box-shadow: var(--shadow-sm);
+    margin-bottom: 24px;
+    border: 1px solid var(--border);
+  }
+  .guide-card h2 {
+    color: var(--primary);
+    font-size: 1.4rem;
+    margin-top: 0;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-bottom: 2px solid var(--bg-peach);
+    padding-bottom: 8px;
+  }
+  .guide-card h2 span {
+    font-size: 1.6rem;
+  }
+  .guide-card h3 {
+    font-size: 1.05rem;
+    color: var(--text-main);
+    margin-top: 18px;
+    margin-bottom: 8px;
+    font-weight: 700;
+  }
+  .guide-card p, .guide-card li {
+    font-size: 0.95rem;
+    color: var(--text-main);
+    line-height: 1.7;
+  }
+  .guide-card ul, .guide-card ol {
+    padding-left: 20px;
+    margin-bottom: 16px;
+  }
+  .guide-card li {
+    margin-bottom: 8px;
+  }
+  .highlight-box {
+    background: var(--bg-peach);
+    border-left: 4px solid var(--primary);
+    padding: 12px 16px;
+    border-radius: var(--radius-sm);
+    margin: 16px 0;
+  }
+  .highlight-box.health {
+    background: #f0f5f3;
+    border-left-color: var(--health);
+  }
+  .highlight-box p {
+    margin: 0;
+    font-size: 0.9rem;
+    font-weight: 500;
+  }
+  .back-btn-wrap {
+    margin-top: 30px;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+
+<div class="guide-container">
+  <div class="guide-header">
+    <div style="font-size: 3rem;">🐱💼</div>
+    <h1>MeowJob 使用說明書</h1>
+    <p>幫主子寫履歷、賺罐罐的純前端 Serverless 平台</p>
+  </div>
+
+  <!-- 卡片 1: 專案介紹 -->
+  <div class="guide-card">
+    <h2><span>🎯</span> 什麼是 MeowJob？</h2>
+    <p>
+      MeowJob 是一個專門為貓咪打造的「求職與生活紀錄」網頁應用程式。我們以幽默的「打工、撒嬌求職」視角，讓飼主（人類）能詳細記錄貓咪日常、醫療健康與體重，並且能隨時產生專屬網址分享給親友。
+    </p>
+    <div class="highlight-box">
+      <p>⚠️ <strong>無伺服器架構說明</strong>：本網站完全由「純前端技術」打造，沒有任何後端雲端伺服器收集你的隱私。你的貓咪資料與相片 100% 儲存在你本機的瀏覽器中，安全有保障！</p>
+    </div>
+  </div>
+
+  <!-- 卡片 2: 新增與管理 -->
+  <div class="guide-card">
+    <h2><span>🐱</span> 1. 貓咪檔案、工作經歷與日誌管理</h2>
+    <ul>
+      <li><strong>新增貓咪與年齡換算</strong>：點擊大廳的「新增貓咪」按鈕即可開始填寫主子的檔案。職稱可以自由發揮（例如：首席撒嬌官、紙箱巡邏專員）。輸入生日後會自動換算為人類年齡與對應貓齡。</li>
+      <li><strong>編輯資料與工作經歷</strong>：點選主子詳細頁頂部的「編輯資料」，除了修改基本欄位外，亦可於表單底部**新增、修改、刪除每一筆「工作經歷」**。</li>
+      <li><strong>打工日誌的發布、修改與刪除</strong>：在日誌頁籤點選「發布新日誌」可撰寫日誌並上傳照片。發布後，時間軸每篇貼文標題旁皆有「編輯」與「刪除」按鈕，便於飼主隨時微調或移除貼文。</li>
+      <li><strong>刪除貓咪</strong>：在大廳卡片右上角有「垃圾桶」圖示，點擊後會彈出確認視窗，可將該隻貓咪完全移除。</li>
+    </ul>
+  </div>
+
+  <!-- 卡片 3: 照片上傳與 300KB 限制 -->
+  <div class="guide-card">
+    <h2><span>🖼️</span> 2. 照片上傳去處與容量限制</h2>
+    <p>
+      當你上傳大頭貼、日誌相片或收款二維碼（QR Code）時，瀏覽器會直接將圖片轉成一長串加密的文字字串（Base64 URL 編碼），並寫入你目前所使用瀏覽器的 <strong>LocalStorage（本地資料庫）</strong>中。
+    </p>
+    <h3>⚠️ 核心容量限制與防呆防護：</h3>
+    <ul>
+      <li><strong>300 KB 限制</strong>：由於瀏覽器的 LocalStorage 共享總容量上限為 5MB，為了防止大圖塞滿空間導致網頁報錯，系統設有防呆限制，<strong>單張上傳照片的體積不得超過 300 KB</strong>。</li>
+      <li><strong>儲存容量指示條</strong>：大廳上方會貼心顯示「目前已使用 X / 5MB」指示條，寫入時若超過配額會被 `try...catch` 捕捉並彈出友善提示，不會發生網頁死機或空白。</li>
+    </ul>
+    <div class="highlight-box">
+      <p>💡 <strong>極速與省空間秘訣 (強烈推薦)</strong>：在新增或編輯照片時，除了上傳本機相片外，你也可以在欄位中<strong>貼上外部網路圖片網址</strong>（如 Imgur 等免費圖床網址）。這樣做只會佔用極小的文字空間，且產生的分享連結會非常短，載入速度最快！</p>
+    </div>
+  </div>
+
+  <!-- 卡片 4: 對外分享 -->
+  <div class="guide-card">
+    <h2><span>🔗</span> 3. 分享網址與隱私過濾</h2>
+    <p>
+      當你在主子詳細頁面點擊「<strong>產生分享連結</strong>」時，系統會把這隻貓咪的履歷、日誌以及相片以壓縮演算法（內建 `CompressionStream`）進行高倍率壓縮，直接封裝塞進網址列後方的參數中。
+    </p>
+    <h3>🔒 隱私與訪客過濾：</h3>
+    <ul>
+      <li><strong>醫療紀錄隱私過濾</strong>：新增醫療紀錄時，若沒有勾選「公開給訪客」，該筆就診隱私資料**絕不會**被打包寫入分享連結中。</li>
+      <li><strong>訪客唯讀視角</strong>：當別人打開你的分享連結時，系統會將網頁自動切換為「訪客瀏覽模式」，自動隱藏所有後台的新增、編輯、管理與刪除按鈕，保護你的前台編輯權。</li>
+      <li><strong>超長網址預警</strong>：如果網址因為包含了大量大張本機照片而導致字元數大於 2,000 個字，系統會彈出警告，建議你換成 Imgur 的圖片網址以防網址傳送時遭受通訊軟體截斷。</li>
+      <li><strong>異常損毀容錯 (Graceful Degradation)</strong>：若分享網址在傳送過程中不小心被截斷或損毀，網頁會優雅攔截解碼失敗錯誤，展示溫馨的「*連結被貓咪叼走了……*」引導畫面，而非報錯死機。</li>
+    </ul>
+  </div>
+
+  <!-- 卡片 5: 備份與資料轉移 -->
+  <div class="guide-card">
+    <h2><span>💾</span> 4. 備份匯出與匯入還原</h2>
+    <ul>
+      <li><strong>匯出備份</strong>：在大廳點選「匯出備份」，系統會自動把所有貓咪的檔案（含大頭貼、日誌、醫療、體重等）以及全域的自訂醫療分類設定打包，下載為一個 `.json` 檔案。</li>
+      <li><strong>匯入還原 (轉移裝置)</strong>：若你更換了電腦、手機或瀏覽器，只需在大廳點選「匯入備份」並選取該檔案，系統會防呆跳出覆蓋確認彈窗，同意後即可完美還原所有資料！</li>
+    </ul>
+  </div>
+
+  <!-- 卡片 6: 體重與健康 -->
+  <div class="guide-card">
+    <h2><span>🩺</span> 5. 體重趨勢與醫療健康管理</h2>
+    <ul>
+      <li><strong>SVG 折線趨勢圖</strong>：在健康看板中輸入 2 筆以上的體重歷史，系統便會利用純 SVG 運算出圓滑的貝氏折線圖，且每個節點上都會永久標示體重數字，橫軸上會清晰標示日期（格式為 yyyy/mm/dd）。</li>
+      <li><strong>點擊圖表展開體重列表</strong>：點擊體重折線圖的任意位置，下方即會展開「歷史體重清單」，方便查看歷次紀錄，並提供「刪除」按鈕以便移除登錄錯誤的數據。</li>
+      <li><strong>醫療紀錄的修改與刪除</strong>：在醫療清單中，每筆紀錄右側都設有「編輯」與「刪除」按鈕。飼主可隨時修正就診項目內容、花費、備註或隱私設定，也可直接刪除該筆就診資料。</li>
+      <li><strong>自訂醫療類別</strong>：可自由新增或移除看診分類。若刪除某分類，歷史紀錄中已選用該分類的紀錄會貼心加上 `(已刪除分類)`，資料不會遺失或報錯。</li>
+      <li><strong>自訂日曆選擇器</strong>：日期欄位在點選後，會跳出優雅的彈窗日曆，且為了防呆，<strong>今天以後的未來日期將一律禁用 (不可選)</strong>。</li>
+    </ul>
+  </div>
+
+  <!-- 卡片 7: 打賞 -->
+  <div class="guide-card">
+    <h2><span>🐟</span> 6. 罐罐贊助基金與乾乾 rain 特效</h2>
+    <ul>
+      <li><strong>贊助收款展示</strong>：此區用於静態展示你的收款 QR Code 或銀行帳戶。訪客必須手動使用自己的網銀掃碼轉帳，系統不含第三方金流自動串接（保證資金直接入帳，不抽成）。</li>
+      <li><strong>手動自報進度</strong>：罐罐的募集進度條由飼主在編輯表單中「手動輸入更新」，是飼主自報進度，與訪客點選打賞無直接掛鉤。</li>
+      <li><strong>免費乾乾雨</strong>：訪客在贊助頁籤點擊「餵顆乾乾（免費）」按鈕，網頁頂部會啟動物理重力粒子特效，下起生動活潑的乾乾與小魚雨，乾乾在撞到邊界後還會彈跳並自動淡出消逝！</li>
+    </ul>
+  </div>
+
+  <div class="back-btn-wrap">
+    <a href="./index.html" class="btn btn-primary">
+      <span class="icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12l9-9 9 9"/><path d="M5 10v10h14V10"/></svg>
+      </span>
+      返回 MeowJob 大廳
+    </a>
+  </div>
+</div>
+
+<footer class="cats-footer">
+  <p>MeowJob 貓咪打工與生活分享平台 © 2026. Code built with Vue 3, Gemini and Claude.<br>Update: 20260719</p>
+</footer>
+
+</body>
+</html>

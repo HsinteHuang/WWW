@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>紀錄產生器原型 (Vue 3 重構版)</title>
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <!-- 引入 Vue 3 CDN -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <!-- Google Fonts: Noto Sans TC -->
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --bg-main: #fcfaf6;
+            --bg-card: #ffffff;
+            --text-main: #4a3728;
+            --text-muted: #8c7355;
+            --primary: #d97706;
+            --primary-hover: #b45309;
+            --primary-light: #fef3c7;
+            --accent: #ca8a04;
+            --border: #f1ebd9;
+            --shadow: 0 10px 25px -5px rgba(217, 119, 6, 0.08), 0 8px 10px -6px rgba(217, 119, 6, 0.04);
+            --transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        body {
+            background-color: var(--bg-main);
+            color: var(--text-main);
+            font-family: 'Noto Sans TC', system-ui, -apple-system, sans-serif;
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+        }
+
+        #app {
+            width: 100%;
+            max-width: 1000px;
+            padding: 40px 20px;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            gap: 30px;
+        }
+
+        /* 導覽列 */
+        .nav-back {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            color: var(--text-muted);
+            text-decoration: none;
+            font-size: 18px;
+            font-weight: 500;
+            transition: var(--transition);
+            align-self: flex-start;
+        }
+        .nav-back:hover {
+            color: var(--primary);
+            transform: translateX(-4px);
+        }
+
+        /* 標題區 */
+        .header {
+            text-align: center;
+            margin-bottom: 10px;
+        }
+        .header h1 {
+            font-size: 32px;
+            font-weight: 700;
+            color: var(--primary-hover);
+            margin: 0 0 8px 0;
+            letter-spacing: 0.5px;
+        }
+        .header p {
+            font-size: 18px;
+            color: var(--text-muted);
+            margin: 0;
+        }
+
+        /* 結果展示卡片：溫暖配色與柔和陰影 */
+        .result-card {
+            background-color: var(--bg-card);
+            border: 2px solid var(--primary-light);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: var(--shadow);
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .result-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 6px;
+            background: linear-gradient(to right, var(--primary), var(--accent));
+        }
+        .result-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--primary);
+            margin: 0;
+            letter-spacing: 0.5px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .result-text {
+            font-size: 22px;
+            font-weight: 500;
+            line-height: 1.8;
+            color: var(--text-main);
+            margin: 0;
+            white-space: pre-line;
+            border-left: 4px solid var(--primary-light);
+            padding-left: 20px;
+        }
+
+        /* 動作按鈕區 */
+        .actions-bar {
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+        .btn {
+            font-family: inherit;
+            font-size: 18px;
+            font-weight: 700;
+            padding: 14px 28px;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: var(--transition);
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+        }
+        .btn-primary {
+            background-color: var(--primary);
+            color: white;
+        }
+        .btn-primary:hover {
+            background-color: var(--primary-hover);
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgba(217, 119, 6, 0.3);
+        }
+        .btn-secondary {
+            background-color: var(--primary-light);
+            color: var(--primary-hover);
+        }
+        .btn-secondary:hover {
+            background-color: #fde68a;
+            transform: translateY(-2px);
+        }
+        .btn-outline {
+            background-color: transparent;
+            border: 2px solid var(--border);
+            color: var(--text-muted);
+        }
+        .btn-outline:hover {
+            border-color: var(--primary);
+            color: var(--primary);
+            background-color: var(--bg-main);
+        }
+
+        /* 選擇面板網格 */
+        .control-panel {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 24px;
+        }
+        .category-card {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02);
+        }
+        .category-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--text-main);
+            margin: 0 0 16px 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            border-bottom: 2px solid var(--bg-main);
+            padding-bottom: 8px;
+        }
+        .category-title span {
+            color: var(--primary);
+        }
+
+        /* 標籤晶片按鈕 (自訂 Radio / Checkbox 樣式) */
+        .chips-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .chip-label {
+            position: relative;
+            cursor: pointer;
+        }
+        .chip-label input {
+            position: absolute;
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .chip-text {
+            display: inline-block;
+            font-size: 18px;
+            font-weight: 500;
+            padding: 8px 18px;
+            background-color: var(--bg-main);
+            border: 1px solid var(--border);
+            border-radius: 30px;
+            color: var(--text-main);
+            transition: var(--transition);
+        }
+        /* Hover 狀態 */
+        .chip-label:hover .chip-text {
+            background-color: var(--primary-light);
+            border-color: var(--primary);
+            color: var(--primary-hover);
+        }
+        /* 選取選中狀態 */
+        .chip-label input:checked + .chip-text {
+            background-color: var(--primary);
+            border-color: var(--primary);
+            color: white;
+            box-shadow: 0 4px 10px rgba(217, 119, 6, 0.25);
+            transform: scale(1.03);
+        }
+
+        /* 複製提示訊息 */
+        .toast-msg {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%) translateY(20px);
+            background-color: rgba(67, 20, 7, 0.9);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 18px;
+            font-weight: 500;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+            opacity: 0;
+            transition: opacity 0.3s, transform 0.3s;
+            pointer-events: none;
+            z-index: 999;
+        }
+        .toast-msg.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+
+        /* 頁尾 */
+        .footer {
+            text-align: center;
+            margin-top: 20px;
+            color: var(--text-muted);
+            font-size: 18px;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <!-- 返回按鈕 -->
+        <a href="../" class="nav-back">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+            返回首頁
+        </a>
+
+        <!-- 標頭區 -->
+        <header class="header">
+            <h1>📝 紀錄產生器原型</h1>
+            <p>使用 Vue 3 重新建構，簡化社工夥伴文書紀錄作業 (已擴充至 50 個選項)</p>
+        </header>
+
+        <!-- 結果展示區 -->
+        <section class="result-card">
+            <h2 class="result-title">
+                <span>✨</span> 生成結果
+            </h2>
+            <div class="result-text" id="sentence-box">{{ generatedSentence }}</div>
+            
+            <div class="actions-bar">
+                <button @click="randomizeAll" class="btn btn-primary">
+                    <span>🎲</span> 一鍵隨機生成
+                </button>
+                <button @click="generateSentence" class="btn btn-secondary">
+                    <span>✍️</span> 產生組合字串
+                </button>
+                <button @click="copyToClipboard" class="btn btn-outline">
+                    <span>📋</span> 複製結果
+                </button>
+            </div>
+        </section>
+
+        <!-- 選擇面板區 -->
+        <section class="control-panel">
+            <!-- 人名 -->
+            <div class="category-card">
+                <h3 class="category-title"><span>👤</span> 人名 (50項)</h3>
+                <div class="chips-container">
+                    <label v-for="name in names" :key="name" class="chip-label">
+                        <input type="radio" v-model="selectedName" :value="name" @change="generateSentence">
+                        <span class="chip-text">{{ name }}</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- 地方 -->
+            <div class="category-card">
+                <h3 class="category-title"><span>📍</span> 地方 (50項)</h3>
+                <div class="chips-container">
+                    <label v-for="place in places" :key="place" class="chip-label">
+                        <input type="radio" v-model="selectedPlace" :value="place" @change="generateSentence">
+                        <span class="chip-text">{{ place }}</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- 行為 (複選) -->
+            <div class="category-card">
+                <h3 class="category-title"><span>🏃</span> 行為 (50項，可複選)</h3>
+                <div class="chips-container">
+                    <label v-for="action in actions" :key="action" class="chip-label">
+                        <input type="checkbox" v-model="selectedActions" :value="action" @change="generateSentence">
+                        <span class="chip-text">{{ action }}</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- 學校 -->
+            <div class="category-card">
+                <h3 class="category-title"><span>🏫</span> 學校 (50項)</h3>
+                <div class="chips-container">
+                    <label v-for="school in schools" :key="school" class="chip-label">
+                        <input type="radio" v-model="selectedSchool" :value="school" @change="generateSentence">
+                        <span class="chip-text">{{ school }}</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- 科系 -->
+            <div class="category-card">
+                <h3 class="category-title"><span>🎓</span> 科系 (50項)</h3>
+                <div class="chips-container">
+                    <label v-for="dept in depts" :key="dept" class="chip-label">
+                        <input type="radio" v-model="selectedDept" :value="dept" @change="generateSentence">
+                        <span class="chip-text">{{ dept }}</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- 學位 -->
+            <div class="category-card">
+                <h3 class="category-title"><span>📜</span> 學位 (50項)</h3>
+                <div class="chips-container">
+                    <label v-for="degree in degrees" :key="degree" class="chip-label">
+                        <input type="radio" v-model="selectedDegree" :value="degree" @change="generateSentence">
+                        <span class="chip-text">{{ degree }}</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- 驚嘆句 -->
+            <div class="category-card">
+                <h3 class="category-title"><span>💭</span> 驚嘆句 (50項)</h3>
+                <div class="chips-container">
+                    <label v-for="excl in excls" :key="excl" class="chip-label">
+                        <input type="radio" v-model="selectedExcl" :value="excl" @change="generateSentence">
+                        <span class="chip-text">{{ excl }}</span>
+                    </label>
+                </div>
+            </div>
+        </section>
+
+        <!-- 複製成功的 Toast -->
+        <div class="toast-msg" :class="{ show: showToast }">
+            複製成功！已複製至剪貼簿。
+        </div>
+
+        <!-- 頁尾 -->
+        <footer class="footer">
+            <p>© 2026. Built with Vue 3.</p>
+        </footer>
+    </div>
+
+    <script>
+        const { createApp, ref, onMounted } = Vue;
+
+        createApp({
+            setup() {
+                // 資料來源字串 (每種類別已擴充至 50 個項目)
+                const txtNames = '陳小編,李阿回,蔡小舞,陳某人,賴阿德,羅停委,李小鐘,鄭阿敬,邱小貞,何某誠,汪小明,張小強,陳阿文,鍾阿鈴,林小粽,陳念慧,侯阿廷,潘小民,陳阿竺,陳小明,林大圖,陳明忠,楊阿昱,黃小芬,黃小慧,楊小中,廖小倫,陳阿華,林小烽,陳阿政,陳阿鮮,賴小微,蔡小英,馬阿九,蘇阿昌,游阿錫,柯阿哲,林阿龍,侯阿友,盧阿燕,張阿善,陳阿邁,高阿安,高阿嘉,郭阿台,黃阿捷,簡阿安,戴阿資,周阿瑜,許阿光';
+                const txtSchools = '大自然幼稚園,僑笑國小,散光國中,南新國中,台溪高工,中星大學,修蘋科大,輪頓政學院,康乃馨大學,擱再來大學,不用唸大學,霍格華茲魔法學校,麻瓜研究學院,哈佛沒佛大學,劍橋沒橋大學,麻省理工不工學院,史丹佛不丹佛大學,耶魯沒路大學,康乃爾沒鳥大學,普林斯頓不斯頓大學,慶應沒應大學,早稻田沒米大學,東京冷大學,北京熱大學,雙葉幼稚園,春日部防衛隊小學,青青草原小學,羊羊運動學院,喜馬拉雅高工,玉山神學院,阿里山茶葉大學,日月潭泳渡學校,墾丁衝浪學院,綠島溫泉大學,蘭嶼飛魚學院,澎湖仙人掌大學,金門高粱學院,馬祖坑道大學,宜蘭三星蔥大學,新竹米粉大學,台中大甲媽學院,彰化大佛大學,嘉義火雞肉飯大學,台南牛肉湯大學,高雄發大財大學,屏東黑鮪魚大學,花蓮麻糬學院,台東熱氣球大學,基隆廟口夜市大學,台北101爬樓梯大學';
+                const txtDepts = '比較系,有夠系,不太系,電控系,設計系,發誓給別人系,非常系,太空系,有點系,不知道什麼系,實在有點系,怎麼那麼系,沒關係,很有關係,毫無關係,佛系,躺平系,摸魚系,聊天系,睡覺系,追劇系,吃貨系,減肥明天再說系,遲到有理系,熬夜修仙系,咖啡中毒系,珍珠奶茶半糖微冰系,買買買剁手系,信用卡刷爆系,單身狗保護系,閃光彈退散系,貓奴伺候系,柴犬散步系,社會政策與社會工作系,電機工程系,工業自動化控制系,法律學系,現代反曲弓射箭系,人工智慧特工系,複製貼上系,程式碼除錯除到抓狂系,開會開到睡著系,報告寫不出來系,簡報隨便做做系,伸手牌發問系,鍵盤俠開戰系,吃瓜群眾系,下班第一名系,薪水小偷系,週末不想動系';
+                const txtDegrees = '5.5個學位,消失的論文,寫不出來的計畫書,補發多次的學位證明,極度機密,不要問很恐怖,族繁不及備載,書卷獎,雨豆獎,紫心地瓜,景星地瓜,被退學證明書,重修三年級證書,延畢五年榮譽勳章,教授的咖啡專用調製師學位,報告全靠AI寫學士,考試小抄達人碩士,博士班念了十年沒畢業證書,世界摸魚協會榮譽會長,國家級薪水小偷認證,鍵盤最速打字員學位,全球睡眠障礙研究傑出獎,滑手機金氏紀錄保持人,吃便當大賽冠軍碩士,網路斷線焦慮症第一名,退堂鼓國家隊首席手,團購發起人專業文憑,遲到界永久榮譽會員,拖延症末期患者證明,下班打卡奧運金牌,聊天室句點王碩士,減肥失敗協會常務理事,熬夜冠軍博士,白日夢冒險家學位,貓咪按摩師特許執照,柴犬牽繩掌控專員,星巴克VIP認證學位,網購包裹拆箱大師,迷路指南專業認證,珍珠奶茶品評家碩士,追劇馬拉松完賽證明,遊戲十連抽全保底證書,廢話文學創始人學位,數位排毒失敗證明書,體脂肪控制失敗碩士,水晶餃研究專家學位,空氣泡泡糖大師證書,沙發馬鈴薯特級學位,轉載梗圖達人證照,沒有這個學位';
+                const txtPlaces = '新港,南港,伸港,一府,二鹿,艋舺,一心,二聖,三多,四維,五福,六合,七賢,八德,九如,十全,你也幫幫忙工作室,說說而已股份有限公司,相信你就輸了科技公司,跟本什麼都不會網通設備技研,說了你也不信工坊,咖啡沒喝會酸掉貿易公司,有膽你就來職業工會,惡靈古堡養護中心,侏羅紀公園生態園區,霍格華茲大禮堂,馬里亞納海溝底部,月球背面發射基地,火星殖民第一觀光區,百慕達三角迷航中心,亞特蘭提斯海底咖啡廳,阿里山看日出火車頭,日月潭玄奘寺旁茶葉蛋攤,墾丁大街烤魷魚攤位,台北101觀景台垃圾桶旁,西門町徒步區大水溝蓋,基隆廟口營養三明治排隊隊伍,新竹城隍廟貢丸湯大鼎前,台中歌劇院噴水池中央,彰化八卦山大佛手掌心,台南安平古堡防空洞,高雄駁二特區大公仔頭頂,宜蘭礁溪溫泉泡腳池,花蓮七星潭撿石頭海灘,台東伯朗大道金城武樹下,綠島監獄門口放風區,蘭嶼氣象站最高點,澎湖跨海大橋橋墩,金門風獅爺背後,馬祖藍眼淚發光海面上';
+                const txtActions = '什麼都不會,略懂略懂,沒有三兩三不敢上粱山,睡覺睡到腳抽筋,插科打諢,混水摸魚,走路,騎車,考試,開車,工作,旅遊,身經百戰,百戰百勝,年逾不惑一事無成,有志難申,街頭賣藝,世界第一,躺在沙發上裝死,瘋狂滑手機不眨眼,狂喝珍珠奶茶不嚼珍珠,用念力減肥中,把專案拖延到最後一秒,對著螢幕發呆了兩小時,假裝在寫程式其實在看梗圖,把所有的問題都推給AI,開會時偷偷閉眼睛點頭,網購了一堆根本用不到的東西,一邊打瞌睡一邊敲鍵盤,吃完晚餐立刻想宵夜吃什麼,把咖啡當開水在灌,對著貓咪學貓叫,牽著柴犬被柴犬牽著跑,站在箭靶前瞄準了十分鐘,寫法律訴狀寫到靈魂出竅,抱怨工作又默默把事情做完,打卡下班時速度堪比閃電,用鍵盤跟網民大戰三百回合,忘記自己剛才要拿什麼,把密碼輸錯三次被鎖卡,一直重新整理網頁等包裹通知,用吸管把飲料吸得很大聲,聽歌聽到跟著大聲唱破音,在浴室舉辦個人世界巡迴演唱會,挑戰十秒內把便當吃光,點了手搖杯忘記拿吸管,把手機拿在手上卻在找手機,把襪子脫掉隨手亂丟,倒頭就睡一覺到天亮,什麼事都不想做只想放空';
+                const txtExcls = '好厲害,好強大,好酷喔,好棒棒,哇喔,不錯嘛,有搞頭喔,這麼讚,給你100分,太神奇了,無人能比,讓人覺得恐怖,可以不要那麼厲害嗎,太神啦,簡直不可思議,天啊太強了,令人嘆為觀止,簡直是天才,佩服得五體投地,簡直是神蹟,這也行啊,太狂了吧,根本是奇蹟,帥到掉渣,厲害了我的天,瞎爆了啦,這是什麼騷操作,笑死我了,我服了你,真的假的啦,不得了啊,這操作太犀利,讓人大開眼界,簡直是業界天花板,強到沒朋友,跪著看完,我的老天鵝啊,尊絕不凡啊,這不是一般人做得到的,秀到飛起,給你點讚,令人驚艷,簡直完美,無懈可擊,太讓人感動了,這簡直是藝術,實力不容小覷,嚇死寶寶了,太扯了吧,太幽默了';
+
+                // 解析後的陣列
+                const names = ref(txtNames.split(','));
+                const schools = ref(txtSchools.split(','));
+                const depts = ref(txtDepts.split(','));
+                const degrees = ref(txtDegrees.split(','));
+                const places = ref(txtPlaces.split(','));
+                const actions = ref(txtActions.split(','));
+                const excls = ref(txtExcls.split(','));
+
+                // 選取的響應式變數
+                const selectedName = ref('');
+                const selectedSchool = ref('');
+                const selectedDept = ref('');
+                const selectedDegree = ref('');
+                const selectedPlace = ref('');
+                const selectedActions = ref([]);
+                const selectedExcl = ref('');
+
+                const generatedSentence = ref('請點擊「一鍵隨機生成」或從下方自訂項目！');
+                const showToast = ref(false);
+
+                // 隨機選取陣列中一個項目
+                const getRandomItem = (arr) => {
+                    return arr[Math.floor(Math.random() * arr.length)];
+                };
+
+                // 一鍵隨機選取
+                const randomizeAll = () => {
+                    selectedName.value = getRandomItem(names.value);
+                    selectedSchool.value = getRandomItem(schools.value);
+                    selectedDept.value = getRandomItem(depts.value);
+                    selectedDegree.value = getRandomItem(degrees.value);
+                    selectedPlace.value = getRandomItem(places.value);
+                    selectedExcl.value = getRandomItem(excls.value);
+                    
+                    // 行為可隨機選取 1~3 個
+                    const shuffled = [...actions.value].sort(() => 0.5 - Math.random());
+                    selectedActions.value = shuffled.slice(0, Math.floor(Math.random() * 3) + 1);
+
+                    generateSentence();
+                };
+
+                // 產生語句
+                const generateSentence = () => {
+                    const name = selectedName.value || '＿＿＿';
+                    const place = selectedPlace.value || '＿＿＿';
+                    const actionStr = selectedActions.value.length > 0 ? selectedActions.value.join('、') : '＿＿＿';
+                    const school = selectedSchool.value || '＿＿＿';
+                    const dept = selectedDept.value || '＿＿＿';
+                    const degree = selectedDegree.value || '＿＿＿';
+                    const excl = selectedExcl.value || '＿＿＿';
+
+                    generatedSentence.value = `${name}，在${place}，${actionStr}。\n畢業於${school}${dept}，\n獲得${degree}。\n實在${excl}！`;
+                };
+
+                // 複製至剪貼簿
+                const copyToClipboard = () => {
+                    navigator.clipboard.writeText(generatedSentence.value).then(() => {
+                        showToast.value = true;
+                        setTimeout(() => {
+                            showToast.value = false;
+                        }, 2000);
+                    }).catch(err => {
+                        console.error('複製失敗: ', err);
+                    });
+                };
+
+                // 初始化載入
+                onMounted(() => {
+                    randomizeAll();
+                });
+
+                return {
+                    names, schools, depts, degrees, places, actions, excls,
+                    selectedName, selectedSchool, selectedDept, selectedDegree, selectedPlace, selectedActions, selectedExcl,
+                    generatedSentence, showToast,
+                    randomizeAll, generateSentence, copyToClipboard
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>

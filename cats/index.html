@@ -1,0 +1,1398 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MeowJob 貓咪打工與生活分享平台</title>
+<link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+<link rel="stylesheet" href="./style.css" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@500;700&family=Noto+Sans+TC:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+</head>
+<body>
+<div id="app" v-cloak>
+
+  <!-- ============ 訪客解碼失敗錯誤頁 ============ -->
+  <div v-if="view === 'error'" class="error-page">
+    <div class="icon-lg" v-html="ICONS.sadCat"></div>
+    <h2>喵！連結好像在傳送途中被貓咪叼走了……</h2>
+    <p>這組分享連結似乎已經損毀或不完整，沒辦法讀取貓咪資料。（解碼失敗）</p>
+    <div class="actions">
+      <a class="btn btn-primary" :href="basePath">
+        <span class="icon" v-html="ICONS.home"></span> 前往大廳首頁
+      </a>
+      <a class="btn btn-secondary" :href="basePath">
+        <span class="icon" v-html="ICONS.plus"></span> 我也要幫我的貓咪寫履歷
+      </a>
+    </div>
+  </div>
+
+  <!-- ============ 大廳 (Lobby) ============ -->
+  <template v-else-if="view === 'lobby'">
+    <div class="top-bar">
+      <h1>🐱 MeowJob 打工大廳</h1>
+      <div class="actions">
+        <a href="./guide.html" target="_blank" class="btn btn-secondary">
+          <span class="icon" v-html="ICONS.help"></span> 使用說明
+        </a>
+        <button class="btn btn-primary" @click="openAddCat()">
+          <span class="icon" v-html="ICONS.plus"></span> 新增貓咪
+        </button>
+        <button class="btn btn-secondary" @click="exportBackup()" v-if="cats.length">
+          <span class="icon" v-html="ICONS.download"></span> 匯出備份
+        </button>
+        <button class="btn btn-secondary" @click="triggerImportFile()">
+          <span class="icon" v-html="ICONS.upload"></span> 匯入備份
+        </button>
+        <input type="file" ref="importFileInput" accept="application/json" style="display:none" @change="handleImportFile" />
+      </div>
+    </div>
+
+    <div class="storage-bar-wrap" v-if="cats.length">
+      <span>本機儲存空間使用量：{{ storageUsageLabel }}</span>
+      <div class="storage-bar">
+        <div class="storage-bar-fill" :class="{ warn: storagePercent > 60, danger: storagePercent > 85 }" :style="{ width: storagePercent + '%' }"></div>
+      </div>
+    </div>
+
+    <!-- Empty State -->
+    <div class="empty-state" v-if="cats.length === 0">
+      <div class="icon-lg" v-html="ICONS.sleepingCat"></div>
+      <h2>大廳還空空的喔</h2>
+      <p>建立第一隻貓咪的檔案，開始紀錄主子的打工人生吧！</p>
+      <div class="actions">
+        <button class="btn btn-primary" @click="openAddCat()">
+          <span class="icon" v-html="ICONS.plus"></span> 新增貓咪
+        </button>
+        <button class="btn btn-secondary" @click="loadDemoCat()">
+          <span class="icon" v-html="ICONS.sparkles"></span> 載入範例貓咪
+        </button>
+      </div>
+    </div>
+
+    <!-- 貓咪卡片列表 -->
+    <div class="cat-grid" v-else>
+      <div class="cat-card" v-for="cat in cats" :key="cat.id" @click="openCat(cat)">
+        <button class="cat-card-delete" @click.stop="confirmDeleteCat(cat)" aria-label="刪除貓咪">
+          <span class="icon" v-html="ICONS.trash"></span>
+        </button>
+        <div class="avatar"><cat-avatar :value="cat.avatar"></cat-avatar></div>
+        <h3>{{ cat.name }}</h3>
+        <p class="job-title">{{ cat.jobTitle || '尚無職稱' }}</p>
+        <div class="goal-progress">
+          <div class="bar"><div class="bar-fill" :style="{ width: goalPercent(cat) + '%' }"></div></div>
+          <div class="label">{{ cat.currentCansCount || 0 }} / {{ cat.monthlyCansGoal || 0 }} 罐罐</div>
+        </div>
+      </div>
+    </div>
+  </template>
+
+  <!-- ============ 貓咪詳細頁 (Detail) ============ -->
+  <template v-else-if="view === 'detail' && currentCat">
+    <span v-if="isGuest" class="guest-badge">
+      <span class="icon" v-html="ICONS.eye"></span> 訪客瀏覽模式
+    </span>
+    <div class="top-bar" v-if="!isGuest">
+      <button class="btn btn-secondary" @click="backToLobby()">
+        <span class="icon" v-html="ICONS.chevronLeft"></span> 返回大廳
+      </button>
+      <div class="actions">
+        <button class="btn btn-secondary" @click="openEditCat(currentCat)">
+          <span class="icon" v-html="ICONS.edit"></span> 編輯資料
+        </button>
+        <button class="btn btn-primary" @click="generateShareLink()">
+          <span class="icon" v-html="ICONS.copy"></span> 產生分享連結
+        </button>
+      </div>
+    </div>
+    <a v-else class="btn btn-secondary" :href="basePath" style="margin-bottom:16px;display:inline-flex;">
+      <span class="icon" v-html="ICONS.home"></span> 前往大廳首頁
+    </a>
+
+    <div class="detail-header">
+      <div class="avatar"><cat-avatar :value="currentCat.avatar"></cat-avatar></div>
+      <div class="info">
+        <h2>{{ currentCat.name }}</h2>
+        <p class="meta">{{ currentCat.jobTitle }} ・ {{ genderLabel(currentCat.gender) }} ・ {{ currentCat.breed || '混種' }}</p>
+        <p class="meta" v-if="currentCat.birthday">人類年齡 {{ catAgeInfo.humanYears }} 歲（約為貓齡 {{ catAgeInfo.catYears }} 歲）</p>
+        <div class="tags">
+          <span class="tag" v-for="(t,i) in currentCat.personalityTags" :key="i">{{ t }}</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="tabs">
+      <button class="tab-btn" :class="{active: activeTab==='resume'}" @click="activeTab='resume'">📋 履歷</button>
+      <button class="tab-btn" :class="{active: activeTab==='blog'}" @click="activeTab='blog'">📝 打工日誌</button>
+      <button class="tab-btn" :class="{active: activeTab==='medical'}" @click="activeTab='medical'">🩺 醫療健康</button>
+      <button class="tab-btn" :class="{active: activeTab==='tip'}" @click="activeTab='tip'">🐟 罐罐贊助</button>
+    </div>
+
+    <!-- 履歷頁籤 -->
+    <div class="panel" v-if="activeTab==='resume'">
+      <div class="resume-section">
+        <h4>技能專長</h4>
+        <div class="tags"><span class="tag" v-for="(s,i) in currentCat.skills" :key="i">{{ s }}</span></div>
+        <p v-if="!currentCat.skills || !currentCat.skills.length" class="hint">尚未填寫技能專長。</p>
+      </div>
+      <div class="resume-section">
+        <h4>工作經歷</h4>
+        <div class="work-item" v-for="(w,i) in currentCat.workExperience" :key="i">
+          <div class="title">{{ w.title }}</div>
+          <div class="period">{{ w.period }}</div>
+          <div>{{ w.description }}</div>
+        </div>
+        <p v-if="!currentCat.workExperience || !currentCat.workExperience.length" class="hint">尚未填寫工作經歷。</p>
+      </div>
+    </div>
+
+    <!-- 日誌頁籤 -->
+    <div class="panel" v-if="activeTab==='blog'">
+      <div class="medical-toolbar" v-if="!isGuest">
+        <button class="btn btn-primary" @click="openAddBlog()">
+          <span class="icon" v-html="ICONS.plus"></span> 發布新日誌
+        </button>
+      </div>
+      <div class="timeline" v-if="sortedBlogPosts.length">
+        <div class="timeline-item" v-for="post in sortedBlogPosts" :key="post.id">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+            <div class="date">{{ formatDate(post.date) }}</div>
+            <div v-if="!isGuest" style="display:flex; gap:8px;">
+              <button type="button" style="padding:0; font-size:12px; color:var(--primary); font-weight:600;" @click="openEditBlog(post)">編輯</button>
+              <button type="button" style="padding:0; font-size:12px; color:var(--danger); font-weight:600;" @click="deleteBlogPost(post)">刪除</button>
+            </div>
+          </div>
+          <div class="content">{{ post.content }}</div>
+          <img v-if="post.imageUrl" :src="post.imageUrl" alt="日誌照片" />
+        </div>
+      </div>
+      <p v-else class="hint">還沒有任何打工日誌喔。</p>
+    </div>
+
+    <!-- 醫療頁籤 -->
+    <div class="panel" v-if="activeTab==='medical'">
+      <div class="weight-chart-wrap">
+        <h4>體重趨勢</h4>
+        <div v-if="!weightChartData" class="weight-chart-empty">
+          <span v-if="sortedWeightHistory.length===0">尚無體重紀錄，新增第一筆體重資料開始追蹤吧！</span>
+          <span v-else>尚無足夠資料繪製趨勢（至少需要 2 筆紀錄）</span>
+        </div>
+        <svg v-else :viewBox="'0 0 ' + weightChartData.w + ' ' + weightChartData.h" style="width:100%;height:auto;cursor:pointer;" @click="toggleWeightList()" title="點擊圖表可顯示/隱藏體重列表">
+          <defs>
+            <linearGradient id="weightGradient" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#6B9080" stop-opacity="0.35"/>
+              <stop offset="100%" stop-color="#6B9080" stop-opacity="0"/>
+            </linearGradient>
+          </defs>
+          <path :d="weightChartData.areaPath" fill="url(#weightGradient)" stroke="none"/>
+          <path :d="weightChartData.linePath" fill="none" stroke="#6B9080" stroke-width="2.5"/>
+          <!-- 橫軸 (X軸) 線條 (粗線，寬度為 3) -->
+          <line :x1="weightChartData.coords[0].x" y1="210" :x2="weightChartData.coords[weightChartData.coords.length - 1].x" y2="210" stroke="#3D3A37" stroke-width="3" />
+          
+          <g v-for="(c,i) in weightChartData.coords" :key="i">
+            <!-- 體重節點數值標示 (字型級數加大兩級，從 9 變為 11) -->
+            <text :x="c.x" :y="c.y - 12" text-anchor="middle" fill="#6B9080" font-size="11" font-weight="700">{{ c.weight }}kg</text>
+            <!-- 日期標註顯示在橫軸 (X軸) 線條之上 (y=198) 且格式為 yyyy/mm/dd -->
+            <text :x="c.x" y="198" text-anchor="middle" fill="#3D3A37" font-size="12" font-weight="700">{{ c.date ? c.date.replace(/-/g, '/') : '無日期' }}</text>
+            <circle :cx="c.x" :cy="c.y" r="4" fill="#6B9080"/>
+          </g>
+        </svg>
+
+        <!-- 點擊體重趨勢圖後顯示的體重表列 -->
+        <div v-if="showWeightList" class="weight-list-panel" style="margin-top: 16px; border-top: 1px dashed var(--border); padding-top: 16px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+            <strong style="color:var(--health);">⚖️ 歷史體重紀錄 (點擊圖表可收合)</strong>
+            <button type="button" class="btn btn-secondary" style="padding:4px 12px; font-size:12px;" @click="showWeightList = false">收起</button>
+          </div>
+          <div class="medical-list">
+            <div class="medical-item" v-for="w in displayWeightHistory" :key="w.date" style="display:flex; justify-content:space-between; align-items:center;">
+              <div>
+                <strong>{{ w.weight }} kg</strong>
+                <div class="hint" style="margin-top:2px;">{{ formatDate(w.date) }}</div>
+              </div>
+              <button type="button" class="btn btn-danger" style="padding:4px 10px; font-size:12px; border-radius:4px;" v-if="!isGuest" @click="deleteWeight(w)">
+                <span class="icon" v-html="ICONS.trash"></span> 刪除
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="medical-toolbar" v-if="!isGuest">
+        <button class="btn btn-secondary" @click="openAddWeight()">
+          <span class="icon" v-html="ICONS.scale"></span> 新增體重
+        </button>
+        <button class="btn btn-secondary" @click="openManageCategories()">
+          <span class="icon" v-html="ICONS.settings"></span> 管理醫療類別
+        </button>
+        <button class="btn btn-primary" @click="openAddMedical()">
+          <span class="icon" v-html="ICONS.plus"></span> 新增醫療紀錄
+        </button>
+      </div>
+
+      <div class="medical-list">
+        <div class="medical-item" v-for="rec in visibleMedicalRecords" :key="rec.id">
+          <div>
+            <span class="category-badge">{{ categoryLabel(rec.category) }}</span>
+            <strong>{{ rec.title }}</strong>
+            <div class="hint">{{ formatDate(rec.date) }}<span v-if="rec.cost"> ・ NT$ {{ rec.cost }}</span></div>
+            <div v-if="rec.note" style="margin-top:4px; font-size:14px;">{{ rec.note }}</div>
+          </div>
+          <div style="display:flex; flex-direction:column; align-items:flex-end; justify-content:space-between; gap:12px;">
+            <span class="privacy-icon" :title="rec.isPublic ? '公開' : '不公開'">
+              <span class="icon" v-html="rec.isPublic ? ICONS.eye : ICONS.eyeOff"></span>
+            </span>
+            <div v-if="!isGuest" style="display:flex; gap:8px;">
+              <button type="button" style="padding:0; font-size:12px; color:var(--primary); font-weight:600;" @click="openEditMedical(rec)">編輯</button>
+              <button type="button" style="padding:0; font-size:12px; color:var(--danger); font-weight:600;" @click="deleteMedicalRecord(rec)">刪除</button>
+            </div>
+          </div>
+        </div>
+        <p v-if="!visibleMedicalRecords.length" class="hint">尚無醫療紀錄。</p>
+      </div>
+    </div>
+
+    <!-- 打賞頁籤 -->
+    <div class="panel" v-if="activeTab==='tip'">
+      <div class="tip-info">
+        <div class="tip-qr"><cat-avatar v-if="!currentCat.paymentQrCode" value="icon:orange"></cat-avatar><img v-else :src="currentCat.paymentQrCode" alt="收款 QR Code" /></div>
+        <div>
+          <p><strong>{{ currentCat.currentCansCount || 0 }} / {{ currentCat.monthlyCansGoal || 0 }}</strong> 罐罐目標</p>
+          <p v-if="currentCat.bankAccount">收款帳號：{{ currentCat.bankAccount }}</p>
+          <p v-if="currentCat.paymentNote">{{ currentCat.paymentNote }}</p>
+          <p class="hint">⚠️ 本頁僅展示收款資訊，訪客請自行透過外部 App 掃碼或轉帳贊助，網站不含自動化金流串接與付款確認。</p>
+        </div>
+      </div>
+      <div class="tip-canvas-wrap">
+        <canvas ref="tipCanvas"></canvas>
+      </div>
+      <button class="btn btn-health" @click="feedCat()">
+        <span class="icon" v-html="ICONS.sparkles"></span> 餵顆乾乾（免費）
+      </button>
+    </div>
+  </template>
+
+  <!-- ============ 底部宣告 ============ -->
+  <footer class="cats-footer">
+    <p>MeowJob 貓咪打工與生活分享平台 © 2026. Code built with Vue 3, Gemini and Claude.<br>Update: 20260719</p>
+  </footer>
+
+  <!-- ============ 新增/編輯貓咪 Modal ============ -->
+  <div class="modal-overlay" v-if="showAddCatModal" @click.self="showAddCatModal=false">
+    <div class="modal-box">
+      <h3>{{ editingCat ? '編輯貓咪資料' : '新增貓咪' }}</h3>
+
+      <div class="form-row">
+        <label>大頭貼</label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+          <button type="button" class="btn-icon" v-for="key in ['orange','black','white','calico']" :key="key"
+            :style="{ borderColor: catForm.avatar === ('icon:'+key) ? '#E76F51' : '' }"
+            @click="catForm.avatar = 'icon:' + key">
+            <cat-avatar :value="'icon:' + key"></cat-avatar>
+          </button>
+          <label class="btn btn-secondary" style="margin:0;">
+            上傳圖片
+            <input type="file" accept="image/*" style="display:none" @change="handleImageFile($event, url => catForm.avatar = url)" />
+          </label>
+        </div>
+        <p class="hint">建議使用內建插畫圖標，或填寫外部相簿圖片網址（如 Imgur 連結），以防網頁容量不足或分享連結失效。本機上傳圖片單檔不得超過 300KB。</p>
+        <input type="text" v-model="catForm.avatar" placeholder="或直接貼上圖片網址 https://..." style="margin-top:6px;" />
+      </div>
+
+      <div class="form-row">
+        <label>姓名 *</label>
+        <input type="text" v-model="catForm.name" maxlength="30" />
+        <p class="error" v-if="catFormErrors.name">{{ catFormErrors.name }}</p>
+      </div>
+
+      <div class="form-row">
+        <label>職稱 *</label>
+        <input type="text" v-model="catForm.jobTitle" maxlength="30" placeholder="例如：首席撒嬌官" />
+        <p class="error" v-if="catFormErrors.jobTitle">{{ catFormErrors.jobTitle }}</p>
+      </div>
+
+      <div class="form-row">
+        <label>性別</label>
+        <select v-model="catForm.gender">
+          <option value="unknown">不明</option>
+          <option value="male">男生</option>
+          <option value="female">女生</option>
+        </select>
+      </div>
+
+      <div class="form-row">
+        <label>生日</label>
+        <date-picker v-model="catForm.birthday" :max="todayStr"></date-picker>
+        <p class="error" v-if="catFormErrors.birthday">{{ catFormErrors.birthday }}</p>
+      </div>
+
+      <div class="form-row">
+        <label>品種</label>
+        <input type="text" v-model="catForm.breed" maxlength="30" />
+      </div>
+
+      <div class="form-row">
+        <label>個性標籤（以逗號分隔）</label>
+        <input type="text" v-model="catForm.personalityTagsText" placeholder="親人, 貪吃, 愛撒嬌" />
+      </div>
+
+      <div class="form-row">
+        <label>技能專長（以逗號分隔）</label>
+        <input type="text" v-model="catForm.skillsText" placeholder="討摸摸, 巡邏紙箱" />
+      </div>
+
+      <div class="form-row">
+        <label>月薪罐罐目標 *</label>
+        <input type="number" min="1" step="1" v-model="catForm.monthlyCansGoal" />
+        <p class="error" v-if="catFormErrors.monthlyCansGoal">{{ catFormErrors.monthlyCansGoal }}</p>
+      </div>
+
+      <div class="form-row">
+        <label>目前罐罐進度</label>
+        <input type="number" min="0" step="1" v-model="catForm.currentCansCount" />
+        <p class="hint">⚠️ 因無後端可驗證真實付款，此數字由飼主自行手動更新，與「餵顆乾乾」免費特效無關。</p>
+      </div>
+
+      <div class="form-row">
+        <label>收款銀行帳號</label>
+        <input type="text" v-model="catForm.bankAccount" maxlength="100" />
+        <p class="hint">⚠️ 此欄位會完整包含在分享連結中，任何取得連結者皆可解碼看到。建議優先使用 QR Code 圖片而非填寫完整帳號。</p>
+      </div>
+
+      <div class="form-row">
+        <label>收款 QR Code</label>
+        <label class="btn btn-secondary" style="margin:0;">
+          上傳 QR Code 圖片
+          <input type="file" accept="image/*" style="display:none" @change="handleImageFile($event, url => catForm.paymentQrCode = url)" />
+        </label>
+        <input type="text" v-model="catForm.paymentQrCode" placeholder="或直接貼上圖片網址" style="margin-top:6px;" />
+      </div>
+
+      <div class="form-row">
+        <label>贊助備註</label>
+        <textarea v-model="catForm.paymentNote" rows="2" maxlength="200"></textarea>
+      </div>
+
+      <div class="form-row">
+        <label>工作經歷</label>
+        <div v-for="(work, index) in catForm.workExperience" :key="index" style="border: 1px solid var(--border); padding: 12px; border-radius: var(--radius-sm); margin-bottom: 12px; background: var(--bg-peach);">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <strong>經歷 #{{ index + 1 }}</strong>
+            <button type="button" class="btn btn-danger" style="padding:4px 10px; font-size: 12px; border-radius:4px;" @click="catForm.workExperience.splice(index, 1)">刪除</button>
+          </div>
+          <div style="margin-bottom:8px;">
+            <input type="text" v-model="work.title" placeholder="工作職稱 (例如：特聘捕鼠官)" />
+          </div>
+          <div style="margin-bottom:8px;">
+            <input type="text" v-model="work.period" placeholder="工作期間 (例如：2023 - 2024)" />
+          </div>
+          <div>
+            <textarea v-model="work.description" placeholder="工作內容描述 (例如：負責機房防鼠作業)" rows="2"></textarea>
+          </div>
+        </div>
+        <button type="button" class="btn btn-secondary" style="width:100%;" @click="catForm.workExperience.push({ title: '', period: '', description: '' })">
+          <span class="icon" v-html="ICONS.plus"></span> 新增工作經歷
+        </button>
+      </div>
+
+      <div class="modal-actions">
+        <button class="btn btn-secondary" @click="showAddCatModal=false">取消</button>
+        <button class="btn btn-primary" @click="saveCat()">儲存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 新增體重 Modal ============ -->
+  <div class="modal-overlay" v-if="showAddWeight" @click.self="showAddWeight=false">
+    <div class="modal-box">
+      <h3>新增體重紀錄</h3>
+      <div class="form-row">
+        <label>日期</label>
+        <date-picker v-model="weightForm.date" :max="todayStr"></date-picker>
+        <p class="error" v-if="weightFormErrors.date">{{ weightFormErrors.date }}</p>
+      </div>
+      <div class="form-row">
+        <label>體重（kg）</label>
+        <input type="number" step="0.1" min="0.1" max="30" v-model="weightForm.weight" />
+        <p class="error" v-if="weightFormErrors.weight">{{ weightFormErrors.weight }}</p>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" @click="showAddWeight=false">取消</button>
+        <button class="btn btn-primary" @click="saveWeightRecord()">儲存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 管理醫療類別 Modal ============ -->
+  <div class="modal-overlay" v-if="showManageCategories" @click.self="showManageCategories=false">
+    <div class="modal-box">
+      <h3>管理醫療類別</h3>
+      <div class="form-row" style="display:flex;gap:8px;">
+        <input type="text" v-model="newCategoryName" placeholder="新增類別名稱" @keyup.enter="addCategory()" />
+        <button class="btn btn-primary" @click="addCategory()">新增</button>
+      </div>
+      <div class="medical-list">
+        <div class="medical-item" v-for="cat in settings.medicalCategories" :key="cat">
+          <span>{{ cat }}</span>
+          <button class="btn-icon" @click="deleteCategory(cat)" aria-label="刪除類別">
+            <span class="icon" v-html="ICONS.trash"></span>
+          </button>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" @click="showManageCategories=false">關閉</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 新增醫療紀錄 Modal ============ -->
+  <div class="modal-overlay" v-if="showAddMedical" @click.self="showAddMedical=false">
+    <div class="modal-box">
+      <h3>{{ editingMedical ? '編輯醫療紀錄' : '新增醫療紀錄' }}</h3>
+      <div class="form-row">
+        <label>就診日期</label>
+        <date-picker v-model="medicalForm.date" :max="todayStr"></date-picker>
+        <p class="error" v-if="medicalFormErrors.date">{{ medicalFormErrors.date }}</p>
+      </div>
+      <div class="form-row">
+        <label>類別</label>
+        <select v-model="medicalForm.category">
+          <option v-for="c in settings.medicalCategories" :key="c" :value="c">{{ c }}</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label>項目名稱</label>
+        <input type="text" v-model="medicalForm.title" maxlength="50" />
+        <p class="error" v-if="medicalFormErrors.title">{{ medicalFormErrors.title }}</p>
+      </div>
+      <div class="form-row">
+        <label>備註</label>
+        <textarea v-model="medicalForm.note" rows="2" maxlength="300"></textarea>
+      </div>
+      <div class="form-row">
+        <label>花費（NT$）</label>
+        <input type="number" min="0" step="1" v-model="medicalForm.cost" />
+      </div>
+      <div class="form-row checkbox-row">
+        <input type="checkbox" id="isPublicChk" v-model="medicalForm.isPublic" />
+        <label for="isPublicChk" style="margin:0;">公開給訪客瀏覽</label>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" @click="showAddMedical=false">取消</button>
+        <button class="btn btn-primary" @click="saveMedicalRecord()">儲存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 發布日誌 Modal ============ -->
+  <div class="modal-overlay" v-if="showAddBlog" @click.self="showAddBlog=false">
+    <div class="modal-box">
+      <h3>{{ editingBlog ? '編輯打工日誌' : '發布打工日誌' }}</h3>
+      <div class="form-row">
+        <label>日期</label>
+        <date-picker v-model="blogForm.date" :max="todayStr"></date-picker>
+        <p class="error" v-if="blogFormErrors.date">{{ blogFormErrors.date }}</p>
+      </div>
+      <div class="form-row">
+        <label>內容</label>
+        <textarea v-model="blogForm.content" rows="4" maxlength="1000"></textarea>
+        <p class="error" v-if="blogFormErrors.content">{{ blogFormErrors.content }}</p>
+      </div>
+      <div class="form-row">
+        <label>圖片（選填）</label>
+        <label class="btn btn-secondary" style="margin:0;">
+          上傳圖片
+          <input type="file" accept="image/*" style="display:none" @change="handleImageFile($event, url => blogForm.imageUrl = url)" />
+        </label>
+        <input type="text" v-model="blogForm.imageUrl" placeholder="或直接貼上圖片網址" style="margin-top:6px;" />
+        <p class="hint">建議使用外部相簿圖片網址，以防分享連結過長。本機上傳圖片單檔不得超過 300KB。</p>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" @click="showAddBlog=false">取消</button>
+        <button class="btn btn-primary" @click="saveBlogPost()">發布</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 刪除貓咪確認 Modal ============ -->
+  <div class="modal-overlay" v-if="showDeleteCatConfirm" @click.self="showDeleteCatConfirm=false">
+    <div class="modal-box">
+      <h3>確定要刪除「{{ deleteCatTarget && deleteCatTarget.name }}」嗎？</h3>
+      <p class="hint">此操作將永久刪除該貓咪的所有履歷、日誌與醫療紀錄，且無法復原。</p>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" @click="showDeleteCatConfirm=false">取消</button>
+        <button class="btn btn-danger" @click="deleteCatConfirmed()">確定刪除</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 匯入覆蓋確認 Modal ============ -->
+  <div class="modal-overlay" v-if="showImportConfirm" @click.self="showImportConfirm=false">
+    <div class="modal-box">
+      <h3>確定要匯入備份嗎？</h3>
+      <p class="hint">匯入將覆蓋目前大廳所有貓咪與醫療類別設定，此操作無法復原。</p>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" @click="showImportConfirm=false">取消</button>
+        <button class="btn btn-primary" @click="confirmImport()">確定覆蓋匯入</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 分享連結結果 Modal ============ -->
+  <div class="modal-overlay" v-if="showShareResult" @click.self="showShareResult=false">
+    <div class="modal-box">
+      <h3>分享連結已產生</h3>
+      <div class="form-row">
+        <textarea readonly rows="4" :value="shareUrl" @click="$event.target.select()"></textarea>
+      </div>
+      <p class="error" v-if="shareUrlTooLong">
+        ⚠️ 網址長度超過 2,000 個字元，可能在部分平台無法正常開啟。建議將貼文照片替換為「網路圖片網址」以縮減連結長度。
+      </p>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" @click="showShareResult=false">關閉</button>
+        <button class="btn btn-primary" @click="copyShareLink()">
+          <span class="icon" v-html="ICONS.copy"></span> 複製連結
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ Toast ============ -->
+  <div class="toast" v-if="toastMsg">{{ toastMsg }}</div>
+
+</div>
+
+<script>
+/* ===================== 常數與工具函式 ===================== */
+
+const DEFAULT_CATEGORIES = ['內科', '外科', '牙科', '皮膚科', '疫苗接種', '其他'];
+
+function catFaceSvg(furColor, eyeColor) {
+  eyeColor = eyeColor || '#3D3A37';
+  return '<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">' +
+    '<path d="M20 35 L35 8 L42 34 Z" fill="' + furColor + '"/>' +
+    '<path d="M80 35 L65 8 L58 34 Z" fill="' + furColor + '"/>' +
+    '<circle cx="50" cy="55" r="34" fill="' + furColor + '"/>' +
+    '<circle cx="38" cy="52" r="4" fill="' + eyeColor + '"/>' +
+    '<circle cx="62" cy="52" r="4" fill="' + eyeColor + '"/>' +
+    '<path d="M46 63 Q50 68 54 63" stroke="' + eyeColor + '" stroke-width="2.5" fill="none" stroke-linecap="round"/>' +
+    '<line x1="14" y1="55" x2="30" y2="57" stroke="' + eyeColor + '" stroke-width="1.5" opacity="0.5"/>' +
+    '<line x1="70" y1="57" x2="86" y2="55" stroke="' + eyeColor + '" stroke-width="1.5" opacity="0.5"/>' +
+    '</svg>';
+}
+
+const CAT_ICON_SVGS = {
+  orange: catFaceSvg('#F4A261'),
+  black: catFaceSvg('#4a4340', '#EADBC8'),
+  white: catFaceSvg('#f5ede1', '#8a8580'),
+  calico: catFaceSvg('#e8c39e'),
+};
+
+const ICONS = {
+  plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>',
+  edit: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>',
+  trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>',
+  copy: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>',
+  download: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M6 11l6 6 6-6"/><path d="M4 21h16"/></svg>',
+  upload: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21V9"/><path d="M6 15l6-6 6 6"/><path d="M4 3h16"/></svg>',
+  chevronLeft: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>',
+  chevronRight: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>',
+  settings: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>',
+  scale: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"/><path d="M5 7h14l-2 6a5 5 0 0 1-10 0z" transform="translate(0,-3)"/></svg>',
+  eye: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>',
+  eyeOff: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.9 17.9A10.4 10.4 0 0 1 12 20c-7 0-11-8-11-8a19.7 19.7 0 0 1 5-5.9M9.9 4.2A10.6 10.6 0 0 1 12 4c7 0 11 8 11 8a19.6 19.6 0 0 1-3.2 4.4"/><line x1="1" y1="1" x2="23" y2="23"/></svg>',
+  sparkles: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5z"/><path d="M19 15l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z"/></svg>',
+  home: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12l9-9 9 9"/><path d="M5 10v10h14V10"/></svg>',
+  help: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
+  sleepingCat: '<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><ellipse cx="45" cy="65" rx="38" ry="22" fill="#F4A261"/><path d="M15 55 L25 35 L32 55 Z" fill="#F4A261"/><path d="M65 55 L72 32 L80 52 Z" fill="#F4A261"/><path d="M28 60 Q35 65 42 60" stroke="#3D3A37" stroke-width="2" fill="none" stroke-linecap="round"/><text x="72" y="30" font-size="16" fill="#8a8580">Z</text><text x="82" y="18" font-size="12" fill="#8a8580">z</text></svg>',
+  sadCat: '<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><path d="M20 35 L35 8 L42 34 Z" fill="#E76F51"/><path d="M80 35 L65 8 L58 34 Z" fill="#E76F51"/><circle cx="50" cy="55" r="34" fill="#E76F51"/><path d="M33 50 L43 56 M43 50 L33 56" stroke="#3D3A37" stroke-width="3" stroke-linecap="round"/><path d="M57 50 L67 56 M67 50 L57 56" stroke="#3D3A37" stroke-width="3" stroke-linecap="round"/><path d="M42 68 Q50 62 58 68" stroke="#3D3A37" stroke-width="2.5" fill="none" stroke-linecap="round"/></svg>',
+};
+
+function pad2(n) { return String(n).padStart(2, '0'); }
+function toISODate(d) { return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); }
+
+function base64UrlEncode(bytes) {
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+function base64UrlDecode(str) {
+  let base64 = str.replace(/-/g, '+').replace(/_/g, '/');
+  while (base64.length % 4) base64 += '=';
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+async function compressToBytes(str) {
+  const cs = new CompressionStream('deflate-raw');
+  const writer = cs.writable.getWriter();
+  writer.write(new TextEncoder().encode(str));
+  writer.close();
+  const buf = await new Response(cs.readable).arrayBuffer();
+  return new Uint8Array(buf);
+}
+async function decompressBytes(bytes) {
+  const ds = new DecompressionStream('deflate-raw');
+  const writer = ds.writable.getWriter();
+  writer.write(bytes);
+  writer.close();
+  const buf = await new Response(ds.readable).arrayBuffer();
+  return new TextDecoder().decode(buf);
+}
+
+function isSafeImageUrl(v) {
+  return typeof v === 'string' && (/^https?:\/\//i.test(v) || /^data:image\//i.test(v) || /^icon:(orange|black|white|calico)$/.test(v));
+}
+
+/** 分享 / 匯入資料的欄位白名單過濾（防止 XSS 與異常資料結構） */
+function sanitizeSharedCat(raw, saltIndex) {
+  saltIndex = saltIndex || 0;
+  if (!raw || typeof raw !== 'object') throw new Error('invalid cat data');
+  const str = (v, max) => (typeof v === 'string' ? v.slice(0, max || 500) : '');
+  const num = (v, min, max, fallback) => {
+    const n = Number(v);
+    return Number.isFinite(n) && n >= min && n <= max ? n : fallback;
+  };
+  const dateStr = (v) => (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : '');
+  const imgUrl = (v) => (isSafeImageUrl(v) ? String(v).slice(0, 2000000) : '');
+
+  return {
+    id: num(raw.id, 0, Infinity, Date.now() + saltIndex),
+    schemaVersion: num(raw.schemaVersion, 0, 100, 1),
+    name: str(raw.name, 30) || '未命名貓咪',
+    gender: ['male', 'female', 'unknown'].includes(raw.gender) ? raw.gender : 'unknown',
+    birthday: dateStr(raw.birthday),
+    breed: str(raw.breed, 30),
+    avatar: imgUrl(raw.avatar) || 'icon:orange',
+    weightHistory: Array.isArray(raw.weightHistory)
+      ? raw.weightHistory.slice(0, 100).map((w) => ({ date: dateStr(w && w.date), weight: num(w && w.weight, 0.1, 30, 0.1) })).filter((w) => w.date)
+      : [],
+    jobTitle: str(raw.jobTitle, 30),
+    personalityTags: Array.isArray(raw.personalityTags) ? raw.personalityTags.slice(0, 20).map((t) => str(t, 20)).filter(Boolean) : [],
+    skills: Array.isArray(raw.skills) ? raw.skills.slice(0, 20).map((t) => str(t, 20)).filter(Boolean) : [],
+    workExperience: Array.isArray(raw.workExperience)
+      ? raw.workExperience.slice(0, 20).map((w) => ({ title: str(w && w.title, 30), period: str(w && w.period, 30), description: str(w && w.description, 200) }))
+      : [],
+    monthlyCansGoal: num(raw.monthlyCansGoal, 1, 999999, 30),
+    currentCansCount: num(raw.currentCansCount, 0, 999999, 0),
+    bankAccount: str(raw.bankAccount, 100),
+    paymentQrCode: imgUrl(raw.paymentQrCode),
+    paymentNote: str(raw.paymentNote, 200),
+    medicalRecords: Array.isArray(raw.medicalRecords)
+      ? raw.medicalRecords.slice(0, 100).map((m, i) => ({
+          id: num(m && m.id, 0, Infinity, Date.now() + saltIndex + i),
+          date: dateStr(m && m.date),
+          category: str(m && m.category, 20),
+          title: str(m && m.title, 50),
+          note: str(m && m.note, 300),
+          cost: num(m && m.cost, 0, 999999, 0),
+          isPublic: !!(m && m.isPublic),
+        })).filter((m) => m.date)
+      : [],
+    blogPosts: Array.isArray(raw.blogPosts)
+      ? raw.blogPosts.slice(0, 100).map((b, i) => ({
+          id: num(b && b.id, 0, Infinity, Date.now() + saltIndex + i),
+          date: dateStr(b && b.date),
+          content: str(b && b.content, 1000),
+          imageUrl: imgUrl(b && b.imageUrl),
+        })).filter((b) => b.date)
+      : [],
+  };
+}
+
+function buildDemoCat() {
+  const iso = (daysAgo) => { const d = new Date(); d.setDate(d.getDate() - daysAgo); return toISODate(d); };
+  const birthday = (() => { const d = new Date(); d.setFullYear(d.getFullYear() - 3); return toISODate(d); })();
+  return {
+    id: Date.now(), schemaVersion: 1, name: '蜜柑', gender: 'male', birthday: birthday,
+    breed: '橘白貓', avatar: 'icon:orange',
+    weightHistory: [{ date: iso(60), weight: 4.2 }, { date: iso(20), weight: 4.5 }],
+    jobTitle: '首席撒嬌官',
+    personalityTags: ['親人', '貪吃', '愛撒嬌'],
+    skills: ['討摸摸', '巡邏紙箱', '監督打字'],
+    workExperience: [{ title: '窗邊觀察員', period: '2023 至今', description: '每日固定巡視窗外可疑動靜，堅守崗位。' }],
+    monthlyCansGoal: 30, currentCansCount: 12, bankAccount: '', paymentQrCode: '',
+    paymentNote: '感謝支持蜜柑的罐罐基金！',
+    medicalRecords: [
+      { id: Date.now() + 1, date: iso(90), category: '疫苗接種', title: '三合一疫苗', note: '例行接種，活動力正常。', cost: 800, isPublic: true },
+      { id: Date.now() + 2, date: iso(10), category: '內科', title: '例行健檢', note: '私人備註：需要注意腎指數。', cost: 1500, isPublic: false },
+    ],
+    blogPosts: [
+      { id: Date.now() + 3, date: iso(5), content: '今天成功佔領了新買的紙箱，工作辛苦！', imageUrl: '' },
+      { id: Date.now() + 4, date: iso(1), content: '認真監督飼主打字中，罐罐基金加油！', imageUrl: '' },
+    ],
+  };
+}
+
+/* ===================== 自訂日曆元件 ===================== */
+const DatePicker = {
+  props: { modelValue: String, max: String },
+  emits: ['update:modelValue'],
+  data() {
+    const base = this.modelValue ? new Date(this.modelValue) : new Date();
+    return { open: false, viewYear: base.getFullYear(), viewMonth: base.getMonth() };
+  },
+  computed: {
+    weekDays() { return ['日', '一', '二', '三', '四', '五', '六']; },
+    daysGrid() {
+      const firstDay = new Date(this.viewYear, this.viewMonth, 1);
+      const startWeekday = firstDay.getDay();
+      const daysInMonth = new Date(this.viewYear, this.viewMonth + 1, 0).getDate();
+      const cells = [];
+      for (let i = 0; i < startWeekday; i++) cells.push(null);
+      for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+      return cells;
+    },
+    maxDate() { return this.max ? new Date(this.max + 'T23:59:59') : null; },
+  },
+  methods: {
+    toggle() { this.open = !this.open; },
+    prevMonth() { if (this.viewMonth === 0) { this.viewMonth = 11; this.viewYear--; } else this.viewMonth--; },
+    nextMonth() { if (this.viewMonth === 11) { this.viewMonth = 0; this.viewYear++; } else this.viewMonth++; },
+    fmt(y, m, d) { return y + '-' + pad2(m + 1) + '-' + pad2(d); },
+    isDisabled(d) {
+      if (!d) return true;
+      if (!this.maxDate) return false;
+      return new Date(this.viewYear, this.viewMonth, d) > this.maxDate;
+    },
+    isSelected(d) { return !!(d && this.modelValue && this.fmt(this.viewYear, this.viewMonth, d) === this.modelValue); },
+    pick(d) {
+      if (!d || this.isDisabled(d)) return;
+      this.$emit('update:modelValue', this.fmt(this.viewYear, this.viewMonth, d));
+      this.open = false;
+    },
+    onClickOutside(e) {
+      if (this.open && this.$refs.wrap && !this.$refs.wrap.contains(e.target)) this.open = false;
+    },
+  },
+  mounted() { document.addEventListener('click', this.onClickOutside, true); },
+  beforeUnmount() { document.removeEventListener('click', this.onClickOutside, true); },
+  template:
+    '<div class="date-input-wrap" ref="wrap">' +
+    '<input type="text" class="date-input-display" readonly :value="modelValue || \'\'" placeholder="請選擇日期" @click="toggle" />' +
+    '<div class="calendar-popup" v-if="open" @click.stop>' +
+    '<div class="calendar-header">' +
+    '<button type="button" class="btn-icon" @click="prevMonth" aria-label="上個月">‹</button>' +
+    '<span>{{ viewYear }} 年 {{ viewMonth + 1 }} 月</span>' +
+    '<button type="button" class="btn-icon" @click="nextMonth" aria-label="下個月">›</button>' +
+    '</div>' +
+    '<div class="calendar-grid">' +
+    '<div class="weekday" v-for="w in weekDays" :key="w">{{ w }}</div>' +
+    '<div v-for="(d,i) in daysGrid" :key="i" :class="[\'day\', { disabled: isDisabled(d), selected: isSelected(d), empty: !d }]" @click="pick(d)">{{ d || \'\' }}</div>' +
+    '</div></div></div>',
+};
+
+/* ===================== 貓咪頭像元件 ===================== */
+const CatAvatar = {
+  props: { value: String },
+  computed: {
+    isIcon() { return typeof this.value === 'string' && this.value.startsWith('icon:'); },
+    isImage() { return typeof this.value === 'string' && /^(https?:\/\/|data:image\/)/i.test(this.value); },
+    iconSvg() {
+      const key = this.isIcon ? this.value.slice(5) : 'orange';
+      return CAT_ICON_SVGS[key] || CAT_ICON_SVGS.orange;
+    },
+  },
+  template:
+    '<div v-if="isImage" style="width:100%;height:100%;"><img :src="value" alt="貓咪頭像" style="width:100%;height:100%;object-fit:cover;" @error="$event.target.style.display=\'none\'" /></div>' +
+    '<div v-else class="icon" style="width:100%;height:100%;" v-html="iconSvg"></div>',
+};
+
+/* ===================== 主應用程式 ===================== */
+const app = Vue.createApp({
+  components: { DatePicker, CatAvatar },
+  data() {
+    return {
+      ICONS,
+      view: 'lobby',
+      isGuest: false,
+      cats: [],
+      settings: { medicalCategories: DEFAULT_CATEGORIES.slice() },
+      currentCatId: null,
+      guestCat: null,
+      activeTab: 'resume',
+      hoveredWeightPoint: null,
+      showWeightList: false, // 體重列表顯示切換
+      editingBlog: null, // 當前編輯的日誌
+      editingMedical: null, // 當前編輯的醫療紀錄
+      toastMsg: '',
+      _toastTimer: null,
+      storageUsageBytes: 0,
+
+      showAddCatModal: false,
+      editingCat: null,
+      catForm: this.emptyCatForm(),
+      catFormErrors: {},
+
+      showAddWeight: false,
+      weightForm: { date: '', weight: '' },
+      weightFormErrors: {},
+
+      showManageCategories: false,
+      newCategoryName: '',
+
+      showAddMedical: false,
+      medicalForm: { date: '', category: DEFAULT_CATEGORIES[0], title: '', note: '', cost: '', isPublic: true },
+      medicalFormErrors: {},
+
+      showAddBlog: false,
+      blogForm: { date: '', content: '', imageUrl: '' },
+      blogFormErrors: {},
+
+      showDeleteCatConfirm: false,
+      deleteCatTarget: null,
+
+      showImportConfirm: false,
+      pendingImportData: null,
+
+      showShareResult: false,
+      shareUrl: '',
+      shareUrlTooLong: false,
+
+      particles: [],
+      canvasAnimId: null,
+      _canvasResize: null,
+    };
+  },
+  computed: {
+    todayStr() { return toISODate(new Date()); },
+    basePath() { return location.pathname; },
+    currentCat() {
+      if (this.isGuest) return this.guestCat;
+      return this.cats.find((c) => c.id === this.currentCatId) || null;
+    },
+    storagePercent() { return Math.min(100, Math.round((this.storageUsageBytes / (5 * 1024 * 1024)) * 1000) / 10); },
+    storageUsageLabel() { return (this.storageUsageBytes / 1024 / 1024).toFixed(2) + ' / 5 MB (' + this.storagePercent + '%)'; },
+    catAgeInfo() {
+      const cat = this.currentCat;
+      if (!cat || !cat.birthday) return { humanYears: 0, catYears: 0 };
+      const birth = new Date(cat.birthday);
+      const now = new Date();
+      let years = now.getFullYear() - birth.getFullYear();
+      const monthDiff = now.getMonth() - birth.getMonth();
+      if (monthDiff < 0 || (monthDiff === 0 && now.getDate() < birth.getDate())) years--;
+      years = Math.max(0, years);
+      let catYears;
+      if (years <= 1) catYears = 15;
+      else if (years === 2) catYears = 24;
+      else catYears = 24 + (years - 2) * 4;
+      return { humanYears: years, catYears: catYears };
+    },
+    sortedWeightHistory() {
+      const cat = this.currentCat;
+      if (!cat) return [];
+      return (cat.weightHistory || []).slice().sort((a, b) => a.date.localeCompare(b.date));
+    },
+    displayWeightHistory() {
+      const cat = this.currentCat;
+      if (!cat) return [];
+      return (cat.weightHistory || []).slice().sort((a, b) => b.date.localeCompare(a.date));
+    },
+    weightChartData() {
+      const points = this.sortedWeightHistory;
+      if (points.length < 2) return null;
+      const weights = points.map((p) => p.weight);
+      const min = Math.min.apply(null, weights);
+      const max = Math.max.apply(null, weights);
+      const range = max - min || 1;
+      const w = 600, h = 240, padX = 30, padY = 24, chartH = 152;
+      const stepX = (w - padX * 2) / (points.length - 1);
+      const coords = points.map((p, i) => ({
+        x: padX + stepX * i,
+        y: padY + chartH * (1 - (p.weight - min) / range),
+        date: p.date, weight: p.weight,
+      }));
+      const linePath = coords.map((c, i) => (i === 0 ? 'M' : 'L') + c.x + ',' + c.y).join(' ');
+      const areaPath = linePath + ' L' + coords[coords.length - 1].x + ',176 L' + coords[0].x + ',176 Z';
+      return { coords: coords, linePath: linePath, areaPath: areaPath, w: w, h: h };
+    },
+    sortedBlogPosts() {
+      const cat = this.currentCat;
+      if (!cat) return [];
+      return (cat.blogPosts || []).slice().sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id);
+    },
+    visibleMedicalRecords() {
+      const cat = this.currentCat;
+      if (!cat) return [];
+      const list = cat.medicalRecords || [];
+      const filtered = this.isGuest ? list.filter((m) => m.isPublic) : list;
+      return filtered.slice().sort((a, b) => b.date.localeCompare(a.date));
+    },
+  },
+  methods: {
+    emptyCatForm() {
+      return {
+        avatar: 'icon:orange', name: '', jobTitle: '', gender: 'unknown', birthday: '', breed: '',
+        personalityTagsText: '', skillsText: '', monthlyCansGoal: 30, currentCansCount: 0,
+        bankAccount: '', paymentQrCode: '', paymentNote: '',
+        workExperience: [], // 工作經歷結構
+      };
+    },
+    genderLabel(g) { return g === 'male' ? '男生' : g === 'female' ? '女生' : '不明'; },
+    formatDate(d) { return d || ''; },
+    goalPercent(cat) {
+      const goal = Number(cat.monthlyCansGoal) || 0;
+      const cur = Number(cat.currentCansCount) || 0;
+      if (goal <= 0) return 0;
+      return Math.min(100, Math.round((cur / goal) * 100));
+    },
+    categoryLabel(name) {
+      if (!name) return '未分類';
+      return this.settings.medicalCategories.includes(name) ? name : name + '（已刪除分類）';
+    },
+    showToast(msg) {
+      this.toastMsg = msg;
+      if (this._toastTimer) clearTimeout(this._toastTimer);
+      this._toastTimer = setTimeout(() => { this.toastMsg = ''; }, 3000);
+    },
+
+    /* ---------- 儲存與讀取 ---------- */
+    loadFromStorage() {
+      try {
+        const catsRaw = localStorage.getItem('meowjob_cats');
+        this.cats = catsRaw ? JSON.parse(catsRaw) : [];
+      } catch (e) { this.cats = []; }
+      try {
+        const settingsRaw = localStorage.getItem('meowjob_settings');
+        const parsed = settingsRaw ? JSON.parse(settingsRaw) : null;
+        this.settings.medicalCategories = (parsed && Array.isArray(parsed.medicalCategories) && parsed.medicalCategories.length)
+          ? parsed.medicalCategories : DEFAULT_CATEGORIES.slice();
+      } catch (e) { this.settings.medicalCategories = DEFAULT_CATEGORIES.slice(); }
+      this.updateStorageUsage();
+    },
+    persistCats() {
+      try {
+        localStorage.setItem('meowjob_cats', JSON.stringify(this.cats));
+        this.updateStorageUsage();
+        return true;
+      } catch (e) {
+        this.updateStorageUsage();
+        this.showToast('儲存空間已滿（超過 5MB），請清理圖片或改用外部圖床網址。');
+        return false;
+      }
+    },
+    persistSettings() {
+      try {
+        localStorage.setItem('meowjob_settings', JSON.stringify(this.settings));
+        this.updateStorageUsage();
+        return true;
+      } catch (e) {
+        this.updateStorageUsage();
+        this.showToast('儲存空間已滿（超過 5MB），請清理圖片或改用外部圖床網址。');
+        return false;
+      }
+    },
+    updateStorageUsage() {
+      try {
+        const catsStr = localStorage.getItem('meowjob_cats') || '';
+        const settingsStr = localStorage.getItem('meowjob_settings') || '';
+        this.storageUsageBytes = new Blob([catsStr, settingsStr]).size;
+      } catch (e) { this.storageUsageBytes = 0; }
+    },
+
+    /* ---------- 大廳操作 ---------- */
+    openAddCat() { this.editingCat = null; this.catForm = this.emptyCatForm(); this.catFormErrors = {}; this.showAddCatModal = true; },
+    openEditCat(cat) {
+      this.editingCat = cat;
+      this.catForm = Object.assign(this.emptyCatForm(), {
+        avatar: cat.avatar, name: cat.name, jobTitle: cat.jobTitle, gender: cat.gender, birthday: cat.birthday, breed: cat.breed,
+        personalityTagsText: (cat.personalityTags || []).join(', '),
+        skillsText: (cat.skills || []).join(', '),
+        monthlyCansGoal: cat.monthlyCansGoal, currentCansCount: cat.currentCansCount,
+        bankAccount: cat.bankAccount, paymentQrCode: cat.paymentQrCode, paymentNote: cat.paymentNote,
+        workExperience: JSON.parse(JSON.stringify(cat.workExperience || [])), // 複製工作經歷
+      });
+      this.catFormErrors = {};
+      this.showAddCatModal = true;
+    },
+    validateCatForm() {
+      const errs = {};
+      if (!this.catForm.name || !this.catForm.name.trim()) errs.name = '姓名為必填欄位';
+      if (!this.catForm.jobTitle || !this.catForm.jobTitle.trim()) errs.jobTitle = '職稱為必填欄位';
+      const goal = Number(this.catForm.monthlyCansGoal);
+      if (!Number.isInteger(goal) || goal <= 0) errs.monthlyCansGoal = '月薪罐罐目標須為大於 0 的正整數';
+      if (this.catForm.birthday && this.catForm.birthday > this.todayStr) errs.birthday = '生日不得晚於今天';
+      this.catFormErrors = errs;
+      return Object.keys(errs).length === 0;
+    },
+    saveCat() {
+      if (!this.validateCatForm()) return;
+      const tags = this.catForm.personalityTagsText.split(',').map((s) => s.trim()).filter(Boolean);
+      const skills = this.catForm.skillsText.split(',').map((s) => s.trim()).filter(Boolean);
+      const base = {
+        avatar: this.catForm.avatar || 'icon:orange', name: this.catForm.name.trim(), jobTitle: this.catForm.jobTitle.trim(),
+        gender: this.catForm.gender, birthday: this.catForm.birthday, breed: this.catForm.breed,
+        personalityTags: tags, skills: skills,
+        monthlyCansGoal: Math.round(Number(this.catForm.monthlyCansGoal)),
+        currentCansCount: Math.max(0, Math.round(Number(this.catForm.currentCansCount) || 0)),
+        bankAccount: this.catForm.bankAccount, paymentQrCode: this.catForm.paymentQrCode, paymentNote: this.catForm.paymentNote,
+        workExperience: this.catForm.workExperience, // 保存經歷
+      };
+      if (this.editingCat) {
+        const idx = this.cats.findIndex((c) => c.id === this.editingCat.id);
+        if (idx !== -1) this.cats[idx] = Object.assign({}, this.cats[idx], base);
+      } else {
+        this.cats.push(Object.assign({
+          id: Date.now(), schemaVersion: 1, weightHistory: [], workExperience: [], medicalRecords: [], blogPosts: [],
+        }, base));
+      }
+      if (this.persistCats()) {
+        this.showAddCatModal = false;
+        this.showToast(this.editingCat ? '貓咪資料已更新！' : '新貓咪已加入大廳！');
+      }
+    },
+    confirmDeleteCat(cat) { this.deleteCatTarget = cat; this.showDeleteCatConfirm = true; },
+    deleteCatConfirmed() {
+      this.cats = this.cats.filter((c) => c.id !== this.deleteCatTarget.id);
+      this.persistCats();
+      if (this.currentCatId === this.deleteCatTarget.id) { this.view = 'lobby'; this.currentCatId = null; }
+      this.showDeleteCatConfirm = false;
+      this.deleteCatTarget = null;
+      this.showToast('貓咪資料已刪除。');
+    },
+    loadDemoCat() {
+      this.cats.push(buildDemoCat());
+      this.persistCats();
+      this.showToast('範例貓咪「蜜柑」已加入大廳！');
+    },
+    openCat(cat) { this.currentCatId = cat.id; this.view = 'detail'; this.activeTab = 'resume'; },
+    backToLobby() { this.view = 'lobby'; this.currentCatId = null; },
+
+    /* ---------- 圖片上傳（統一 300KB 限制） ---------- */
+    handleImageFile(e, callback) {
+      const file = e.target.files[0];
+      if (!file) return;
+      if (!file.type.startsWith('image/')) { this.showToast('請選擇圖片檔案。'); e.target.value = ''; return; }
+      if (file.size > 300 * 1024) {
+        this.showToast('圖片檔案不得超過 300KB，建議使用外部圖床網址或內建插畫圖標。');
+        e.target.value = '';
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = (ev) => callback(ev.target.result);
+      reader.readAsDataURL(file);
+      e.target.value = '';
+    },
+
+    /* ---------- 體重 ---------- */
+    openAddWeight() { this.weightForm = { date: this.todayStr, weight: '' }; this.weightFormErrors = {}; this.showAddWeight = true; },
+    saveWeightRecord() {
+      const errs = {};
+      const w = Number(this.weightForm.weight);
+      if (!(w > 0 && w <= 30)) errs.weight = '體重需為 0.1 ~ 30 kg 之間的數字';
+      if (!this.weightForm.date) errs.date = '請選擇日期';
+      this.weightFormErrors = errs;
+      if (Object.keys(errs).length) return;
+      const cat = this.cats.find((c) => c.id === this.currentCatId);
+      cat.weightHistory.push({ date: this.weightForm.date, weight: w });
+      this.persistCats();
+      this.showAddWeight = false;
+      this.showToast('體重紀錄已新增！');
+    },
+    toggleWeightList() {
+      this.showWeightList = !this.showWeightList;
+    },
+    deleteWeight(w) {
+      if (!this.currentCat) return;
+      if (confirm(`確定要刪除 ${w.date} 的體重紀錄 (${w.weight} kg) 嗎？`)) {
+        const cat = this.cats.find((c) => c.id === this.currentCatId);
+        if (cat) {
+          cat.weightHistory = (cat.weightHistory || []).filter(
+            (x) => !(x.date === w.date && x.weight === w.weight)
+          );
+          this.persistCats();
+          this.showToast('體重紀錄已刪除。');
+        }
+      }
+    },
+
+    /* ---------- 醫療類別 ---------- */
+    openManageCategories() { this.showManageCategories = true; this.newCategoryName = ''; },
+    addCategory() {
+      const name = this.newCategoryName.trim();
+      if (!name) return;
+      if (this.settings.medicalCategories.includes(name)) { this.showToast('此類別已存在。'); return; }
+      this.settings.medicalCategories.push(name);
+      this.persistSettings();
+      this.newCategoryName = '';
+    },
+    deleteCategory(name) {
+      this.settings.medicalCategories = this.settings.medicalCategories.filter((c) => c !== name);
+      this.persistSettings();
+    },
+
+    /* ---------- 醫療紀錄 ---------- */
+    openAddMedical() {
+      this.editingMedical = null;
+      this.medicalForm = { date: this.todayStr, category: this.settings.medicalCategories[0] || '其他', title: '', note: '', cost: '', isPublic: true };
+      this.medicalFormErrors = {};
+      this.showAddMedical = true;
+    },
+    openEditMedical(rec) {
+      this.editingMedical = rec;
+      this.medicalForm = {
+        date: rec.date, category: rec.category, title: rec.title,
+        note: rec.note || '', cost: rec.cost || '', isPublic: !!rec.isPublic
+      };
+      this.medicalFormErrors = {};
+      this.showAddMedical = true;
+    },
+    saveMedicalRecord() {
+      const errs = {};
+      if (!this.medicalForm.date) errs.date = '請選擇就診日期';
+      if (!this.medicalForm.title || !this.medicalForm.title.trim()) errs.title = '請輸入項目名稱';
+      this.medicalFormErrors = errs;
+      if (Object.keys(errs).length) return;
+      const cat = this.cats.find((c) => c.id === this.currentCatId);
+      if (!cat) return;
+      if (this.editingMedical) {
+        const idx = cat.medicalRecords.findIndex((m) => m.id === this.editingMedical.id);
+        if (idx !== -1) {
+          cat.medicalRecords[idx] = Object.assign({}, cat.medicalRecords[idx], {
+            date: this.medicalForm.date, category: this.medicalForm.category,
+            title: this.medicalForm.title.trim(), note: this.medicalForm.note,
+            cost: Number(this.medicalForm.cost) || 0, isPublic: !!this.medicalForm.isPublic
+          });
+        }
+      } else {
+        cat.medicalRecords.push({
+          id: Date.now(), date: this.medicalForm.date, category: this.medicalForm.category,
+          title: this.medicalForm.title.trim(), note: this.medicalForm.note, cost: Number(this.medicalForm.cost) || 0,
+          isPublic: !!this.medicalForm.isPublic,
+        });
+      }
+      this.persistCats();
+      this.showAddMedical = false;
+      this.showToast(this.editingMedical ? '醫療紀錄已更新！' : '醫療紀錄已新增！');
+    },
+    deleteMedicalRecord(rec) {
+      if (confirm(`確定要刪除「${rec.title}」的醫療紀錄嗎？`)) {
+        const cat = this.cats.find((c) => c.id === this.currentCatId);
+        if (cat) {
+          cat.medicalRecords = (cat.medicalRecords || []).filter((m) => m.id !== rec.id);
+          this.persistCats();
+          this.showToast('醫療紀錄已刪除。');
+        }
+      }
+    },
+
+    /* ---------- 日誌 ---------- */
+    openAddBlog() {
+      this.editingBlog = null;
+      this.blogForm = { date: this.todayStr, content: '', imageUrl: '' };
+      this.blogFormErrors = {};
+      this.showAddBlog = true;
+    },
+    openEditBlog(post) {
+      this.editingBlog = post;
+      this.blogForm = { date: post.date, content: post.content, imageUrl: post.imageUrl || '' };
+      this.blogFormErrors = {};
+      this.showAddBlog = true;
+    },
+    saveBlogPost() {
+      const errs = {};
+      if (!this.blogForm.content || !this.blogForm.content.trim()) errs.content = '請輸入日誌內容';
+      if (!this.blogForm.date) errs.date = '請選擇日期';
+      this.blogFormErrors = errs;
+      if (Object.keys(errs).length) return;
+      const cat = this.cats.find((c) => c.id === this.currentCatId);
+      if (!cat) return;
+      if (this.editingBlog) {
+        const idx = cat.blogPosts.findIndex((b) => b.id === this.editingBlog.id);
+        if (idx !== -1) {
+          cat.blogPosts[idx] = Object.assign({}, cat.blogPosts[idx], {
+            date: this.blogForm.date, content: this.blogForm.content.trim(),
+            imageUrl: this.blogForm.imageUrl || ''
+          });
+        }
+      } else {
+        cat.blogPosts.push({
+          id: Date.now(), date: this.blogForm.date,
+          content: this.blogForm.content.trim(), imageUrl: this.blogForm.imageUrl || ''
+        });
+      }
+      this.persistCats();
+      this.showAddBlog = false;
+      this.showToast(this.editingBlog ? '日誌已更新！' : '日誌已發布！');
+    },
+    deleteBlogPost(post) {
+      if (confirm('確定要刪除這篇日誌貼文嗎？')) {
+        const cat = this.cats.find((c) => c.id === this.currentCatId);
+        if (cat) {
+          cat.blogPosts = (cat.blogPosts || []).filter((b) => b.id !== post.id);
+          this.persistCats();
+          this.showToast('日誌已刪除。');
+        }
+      }
+    },
+
+    /* ---------- 分享連結（壓縮 + Base64URL + XSS 白名單） ---------- */
+    async generateShareLink() {
+      const cat = this.cats.find((c) => c.id === this.currentCatId);
+      if (!cat) return;
+      const shareable = JSON.parse(JSON.stringify(cat));
+      shareable.medicalRecords = (shareable.medicalRecords || []).filter((m) => m.isPublic);
+      const jsonStr = JSON.stringify(shareable);
+      let flag, payload;
+      try {
+        if (typeof CompressionStream !== 'undefined') {
+          const bytes = await compressToBytes(jsonStr);
+          payload = base64UrlEncode(bytes);
+          flag = '1';
+        } else {
+          throw new Error('no CompressionStream');
+        }
+      } catch (e) {
+        payload = base64UrlEncode(new TextEncoder().encode(jsonStr));
+        flag = '0';
+      }
+      const url = location.origin + location.pathname + '?share=' + flag + payload;
+      this.shareUrl = url;
+      this.shareUrlTooLong = url.length > 2000;
+      this.showShareResult = true;
+    },
+    async copyShareLink() {
+      try {
+        await navigator.clipboard.writeText(this.shareUrl);
+        this.showToast('分享連結已複製到剪貼簿！');
+      } catch (e) {
+        this.showToast('複製失敗，請手動選取文字複製。');
+      }
+    },
+    async initFromUrl() {
+      const params = new URLSearchParams(location.search);
+      const shareParam = params.get('share');
+      if (!shareParam) { this.loadFromStorage(); this.view = 'lobby'; return; }
+      try {
+        const flag = shareParam.charAt(0);
+        const payload = shareParam.slice(1);
+        const bytes = base64UrlDecode(payload);
+        const jsonStr = flag === '1' ? await decompressBytes(bytes) : new TextDecoder().decode(bytes);
+        const raw = JSON.parse(jsonStr);
+        this.guestCat = sanitizeSharedCat(raw);
+        this.isGuest = true;
+        this.view = 'detail';
+        this.activeTab = 'resume';
+      } catch (e) {
+        this.view = 'error';
+      }
+    },
+
+    /* ---------- 備份匯出 / 匯入 ---------- */
+    exportBackup() {
+      const data = { cats: this.cats, settings: this.settings, exportedAt: new Date().toISOString() };
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'meowjob-backup-' + this.todayStr + '.json';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    },
+    triggerImportFile() { this.$refs.importFileInput.click(); },
+    handleImportFile(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        try {
+          const data = JSON.parse(ev.target.result);
+          if (!data || !Array.isArray(data.cats)) throw new Error('格式錯誤');
+          this.pendingImportData = data;
+          this.showImportConfirm = true;
+        } catch (err) {
+          this.showToast('匯入失敗：檔案格式不正確。');
+        }
+      };
+      reader.readAsText(file);
+      e.target.value = '';
+    },
+    confirmImport() {
+      const data = this.pendingImportData;
+      try {
+        const safeCats = (data.cats || []).filter((c) => c && typeof c === 'object').map((c, i) => sanitizeSharedCat(c, i));
+        const safeCategories = (data.settings && Array.isArray(data.settings.medicalCategories) && data.settings.medicalCategories.length)
+          ? data.settings.medicalCategories.filter((c) => typeof c === 'string').slice(0, 50)
+          : DEFAULT_CATEGORIES.slice();
+        this.cats = safeCats;
+        this.settings.medicalCategories = safeCategories;
+        this.persistCats();
+        this.persistSettings();
+        this.showToast('匯入成功，資料已還原！');
+      } catch (e) {
+        this.showToast('匯入失敗：檔案內容格式不正確。');
+      }
+      this.showImportConfirm = false;
+      this.pendingImportData = null;
+    },
+
+    /* ---------- 打賞頁籤：乾乾雨 Canvas 特效 ---------- */
+    setupCanvas() {
+      const canvas = this.$refs.tipCanvas;
+      if (!canvas) return;
+      const resize = () => { canvas.width = canvas.clientWidth; canvas.height = canvas.clientHeight; };
+      resize();
+      window.addEventListener('resize', resize);
+      this._canvasResize = resize;
+      this.startCanvasLoop();
+    },
+    startCanvasLoop() {
+      const canvas = this.$refs.tipCanvas;
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      const loop = () => {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        this.particles.forEach((p) => {
+          p.vy += 0.18;
+          p.x += p.vx; p.y += p.vy;
+          if (p.y > canvas.height - 16) { p.y = canvas.height - 16; p.vy *= -0.4; }
+          p.life -= 1;
+          ctx.globalAlpha = Math.max(0, Math.min(1, p.life / 25));
+          ctx.beginPath();
+          ctx.fillStyle = p.color;
+          ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+          ctx.fill();
+        });
+        ctx.globalAlpha = 1;
+        this.particles = this.particles.filter((p) => p.life > 0);
+        this.canvasAnimId = requestAnimationFrame(loop);
+      };
+      this.canvasAnimId = requestAnimationFrame(loop);
+    },
+    stopCanvasLoop() {
+      if (this.canvasAnimId) cancelAnimationFrame(this.canvasAnimId);
+      this.canvasAnimId = null;
+      if (this._canvasResize) { window.removeEventListener('resize', this._canvasResize); this._canvasResize = null; }
+    },
+    feedCat() {
+      const canvas = this.$refs.tipCanvas;
+      if (!canvas) return;
+      for (let i = 0; i < 10; i++) {
+        this.particles.push({
+          x: Math.random() * canvas.width, y: -10 - Math.random() * 30,
+          vx: (Math.random() - 0.5) * 2.5, vy: 1 + Math.random() * 2,
+          r: 5 + Math.random() * 4, life: 90 + Math.random() * 30,
+          color: Math.random() > 0.5 ? '#F4A261' : '#6B9080',
+        });
+      }
+    },
+  },
+  watch: {
+    activeTab(val) {
+      if (val === 'tip') { this.$nextTick(() => this.setupCanvas()); }
+      else { this.stopCanvasLoop(); }
+    },
+  },
+  mounted() { this.initFromUrl(); },
+  beforeUnmount() { this.stopCanvasLoop(); },
+});
+
+app.mount('#app');
+</script>
+</body>
+</html>
